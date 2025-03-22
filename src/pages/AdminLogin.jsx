@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Input } from "../components/ui/Input"
+import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import { UserCog, ArrowLeft } from "lucide-react";
 import { useToast } from "../hooks/use-toast";
@@ -21,13 +21,15 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      // In a real application, this would validate against your backend
+      // Validate credentials against hardcoded admin values.
       if (username === "admin" && password === "admin") {
-        await login(username, password);
+        // Call the context's login function with admin info and a token.
+        await login({ username, role: "admin" }, "dummy-admin-token");
         toast({
           title: "Login successful",
           description: "Welcome to the admin dashboard!",
         });
+        // Redirect to the dashboard page.
         navigate("/dashboard");
       } else {
         toast({
@@ -95,7 +97,6 @@ export default function AdminLogin() {
               )}
             </Button>
           </form>
-          
           <div className="mt-6 text-center">
             <Button 
               variant="ghost" 

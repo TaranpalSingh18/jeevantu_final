@@ -90,7 +90,7 @@ export default function Settings() {
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
       name: user?.name || "",
-      email: "sarah.johnson@example.com", // Example data
+      email: "admin@gmail.com", // Example data
       role: user?.role || "",
       bio: "Jungle Safari Shop Manager with expertise in inventory management and customer service.",
     },

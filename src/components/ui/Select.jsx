@@ -1,14 +1,11 @@
-import * as React from "react"
-import * as SelectPrimitive from "@radix-ui/react-select"
-import { Check, ChevronDown, ChevronUp } from "lucide-react"
+import React from "react";
+import * as SelectPrimitive from "@radix-ui/react-select";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { cn } from "../../lib/utils"; // adjust the import path as needed
 
-import { cn } from "../../lib/utils"
-
-const Select = SelectPrimitive.Root
-
-const SelectGroup = SelectPrimitive.Group
-
-const SelectValue = SelectPrimitive.Value
+const Select = SelectPrimitive.Root;
+const SelectGroup = SelectPrimitive.Group;
+const SelectValue = SelectPrimitive.Value;
 
 const SelectTrigger = React.forwardRef((props, ref) => {
   const { className, children, ...restProps } = props;
@@ -27,42 +24,36 @@ const SelectTrigger = React.forwardRef((props, ref) => {
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );
-})
-SelectTrigger.displayName = SelectPrimitive.Trigger.displayName
+});
+SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
 const SelectScrollUpButton = React.forwardRef((props, ref) => {
   const { className, ...restProps } = props;
   return (
     <SelectPrimitive.ScrollUpButton
       ref={ref}
-      className={cn(
-        "flex cursor-default items-center justify-center py-1",
-        className
-      )}
+      className={cn("flex cursor-default items-center justify-center py-1", className)}
       {...restProps}
     >
       <ChevronUp className="h-4 w-4" />
     </SelectPrimitive.ScrollUpButton>
   );
-})
-SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName
+});
+SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
 
 const SelectScrollDownButton = React.forwardRef((props, ref) => {
   const { className, ...restProps } = props;
   return (
     <SelectPrimitive.ScrollDownButton
       ref={ref}
-      className={cn(
-        "flex cursor-default items-center justify-center py-1",
-        className
-      )}
+      className={cn("flex cursor-default items-center justify-center py-1", className)}
       {...restProps}
     >
       <ChevronDown className="h-4 w-4" />
     </SelectPrimitive.ScrollDownButton>
   );
-})
-SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName
+});
+SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
 
 const SelectContent = React.forwardRef((props, ref) => {
   const { className, children, position = "popper", ...restProps } = props;
@@ -93,8 +84,8 @@ const SelectContent = React.forwardRef((props, ref) => {
       </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
   );
-})
-SelectContent.displayName = SelectPrimitive.Content.displayName
+});
+SelectContent.displayName = SelectPrimitive.Content.displayName;
 
 const SelectLabel = React.forwardRef((props, ref) => {
   const { className, ...restProps } = props;
@@ -105,8 +96,8 @@ const SelectLabel = React.forwardRef((props, ref) => {
       {...restProps}
     />
   );
-})
-SelectLabel.displayName = SelectPrimitive.Label.displayName
+});
+SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
 const SelectItem = React.forwardRef((props, ref) => {
   const { className, children, ...restProps } = props;
@@ -124,12 +115,11 @@ const SelectItem = React.forwardRef((props, ref) => {
           <Check className="h-4 w-4" />
         </SelectPrimitive.ItemIndicator>
       </span>
-
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   );
-})
-SelectItem.displayName = SelectPrimitive.Item.displayName
+});
+SelectItem.displayName = SelectPrimitive.Item.displayName;
 
 const SelectSeparator = React.forwardRef((props, ref) => {
   const { className, ...restProps } = props;
@@ -140,8 +130,8 @@ const SelectSeparator = React.forwardRef((props, ref) => {
       {...restProps}
     />
   );
-})
-SelectSeparator.displayName = SelectPrimitive.Separator.displayName
+});
+SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 
 export {
   Select,
@@ -154,4 +144,4 @@ export {
   SelectSeparator,
   SelectScrollUpButton,
   SelectScrollDownButton,
-}
+};

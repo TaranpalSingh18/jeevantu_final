@@ -15,36 +15,15 @@ export const AppProvider = ({ children }) => {
 
   const isAuthenticated = Boolean(user);
 
-  const login = async (username, password) => {
+  // Updated login function that accepts a user object and a token from the backend
+  const login = async (userData, token) => {
     try {
-      // This simulates user authentication for different roles
-      if (username === "admin" && password === "admin") {
-        setUser({
-          id: 1,
-          name: "Admin User",
-          username: username,
-          role: "admin",
-          avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-        });
-      } else if (username === "cashier" && password === "cashier") {
-        setUser({
-          id: 2,
-          name: "Cashier User",
-          username: username,
-          role: "cashier",
-          avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-        });
-      } else if (username === "user" && password === "user") {
-        setUser({
-          id: 3,
-          name: "Regular Customer",
-          username: username,
-          role: "customer",
-          avatar: "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-        });
-      } else {
+      if (!userData || !token) {
         throw new Error("Invalid credentials");
       }
+      // Optionally store the token (for example, in localStorage)
+      localStorage.setItem("token", token);
+      setUser(userData);
     } catch (error) {
       console.error("Login failed:", error);
       throw error;
@@ -53,6 +32,7 @@ export const AppProvider = ({ children }) => {
 
   const logout = () => {
     setUser(null);
+    localStorage.removeItem("token");
   };
 
   return (

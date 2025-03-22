@@ -11,6 +11,8 @@ export default function Dashboard() {
     queryKey: ["/api/dashboard/stats"],
   });
 
+  
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
       {/* Quick Stats */}
@@ -61,7 +63,7 @@ export default function Dashboard() {
       </div>
 
       {/* Charts and Top Products */}
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <SalesChart />
         </div>
@@ -69,7 +71,7 @@ export default function Dashboard() {
         <div>
           <TopProducts />
         </div>
-      </div>
+      </div> */}
 
       {/* Inventory Alerts and Recent Transactions */}
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">

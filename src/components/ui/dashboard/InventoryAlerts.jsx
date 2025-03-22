@@ -63,12 +63,13 @@ export default function InventoryAlerts() {
             ))
           ) : (
             inventoryAlerts?.map((alert) => (
-              <div key={alert.id} className="px-6 py-3 flex items-center">
-                <div className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center
+              <div key={alert._id} className="px-6 py-3 flex items-center">
+                <div
+                  className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center
                   ${alert.status === "critical" 
                     ? "bg-[#EB5757] bg-opacity-10 text-[#EB5757]" 
-                    : "bg-[#F2C94C] bg-opacity-10 text-[#F2C94C]"
-                  }`}
+                    : "bg-[#F2C94C] bg-opacity-10 text-[#F2C94C]"}`
+                  }
                 >
                   {alert.status === "critical" ? (
                     <AlertCircle className="h-5 w-5" />
@@ -79,16 +80,22 @@ export default function InventoryAlerts() {
                 <div className="ml-3 flex-1">
                   <p className="text-sm font-medium text-[#264653]">{alert.product}</p>
                   <p className="text-xs text-gray-500">
-                    Stock: <span className={`font-medium ${alert.status === "critical" ? "text-[#EB5757]" : "text-[#F2C94C]"}`}>
+                    Stock:{" "}
+                    <span
+                      className={`font-medium ${
+                        alert.status === "critical" ? "text-[#EB5757]" : "text-[#F2C94C]"
+                      }`}
+                    >
                       {alert.currentStock} units
-                    </span> (Min: {alert.minRequiredStock})
+                    </span>{" "}
+                    (Min: {alert.minRequiredStock})
                   </p>
                 </div>
                 <Button 
                   variant="ghost" 
                   size="sm"
                   className="text-[#2A9D8F] hover:text-[#1E7268] text-sm font-medium"
-                  onClick={() => handleRestock(alert.id)}
+                  onClick={() => handleRestock(alert._id)}
                   disabled={restockMutation.isPending}
                 >
                   Restock

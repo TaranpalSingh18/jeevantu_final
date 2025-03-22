@@ -1,34 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "../lib/queryClient";
-import { Card, CardContent, CardFooter } from "../components/ui/Card";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "../lib/queryClient";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
-import { 
-  Drawer, 
-  DrawerContent, 
+import { Label } from "../components/ui/Label";
+import {
+  Drawer,
+  DrawerContent,
   DrawerHeader,
   DrawerTitle,
-  DrawerFooter, 
-  DrawerTrigger 
+  DrawerFooter,
+  DrawerTrigger,
 } from "../components/ui/Drawer";
 import { Badge } from "../components/ui/Badge";
-import { 
-  ShoppingCart, 
-  Search, 
-  Filter, 
-  Home, 
-  User, 
-  ChevronDown, 
-  Star, 
-  X, 
-  Minus, 
+import {
+  ShoppingCart,
+  Search,
+  Filter,
+  Home,
+  User,
+  ChevronDown,
+  Star,
+  X,
+  Minus,
   Plus,
-  LogOut
+  LogOut,
 } from "lucide-react";
 import { useToast } from "../hooks/use-toast";
 import { useAppContext } from "../context/AppContext";
+import Footer from "../components/ui/Footer";
 
 export default function Shop() {
   const [, navigate] = useLocation();
@@ -39,12 +47,11 @@ export default function Shop() {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [sortBy, setSortBy] = useState("name-asc");
   const [isCartOpen, setIsCartOpen] = useState(false);
-  
+
   // Fetch products
   const { data: products, isLoading } = useQuery({
     queryKey: ["/api/products"],
-    queryFn: () =>
-      apiRequest("GET", "/api/products").then((res) => res.json()),
+    queryFn: () => apiRequest("GET", "/api/products").then((res) => res.json()),
   });
 
   // Fetch categories
@@ -60,10 +67,8 @@ export default function Shop() {
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (product.description &&
         product.description.toLowerCase().includes(searchQuery.toLowerCase()));
-
     const matchesCategory =
       selectedCategory === "" || product.category === selectedCategory;
-
     return matchesSearch && matchesCategory;
   });
 
@@ -77,7 +82,17 @@ export default function Shop() {
     return 0;
   });
 
+  // Cart functions
   const addToCart = (product) => {
+    if (!user) {
+      toast({
+        title: "Not Logged In",
+        description: "Please log in or sign up to add items to your cart.",
+        variant: "destructive",
+      });
+      navigate("/user-login");
+      return;
+    }
     if (product.stock <= 0) {
       toast({
         title: "Out of stock",
@@ -86,20 +101,17 @@ export default function Shop() {
       });
       return;
     }
-
-    const existingItemIndex = cart.findIndex((item) => item.id === product.id);
-
+    const productId = product._id || product.id;
+    const existingItemIndex = cart.findIndex((item) => item.id === productId);
     if (existingItemIndex !== -1) {
-      // Update quantity if already in cart
       const updatedCart = [...cart];
       updatedCart[existingItemIndex].quantity += 1;
       setCart(updatedCart);
     } else {
-      // Add new item to cart
       setCart([
         ...cart,
         {
-          id: product.id,
+          id: productId,
           name: product.name,
           price: parseFloat(product.price),
           imageUrl: product.imageUrl,
@@ -107,7 +119,6 @@ export default function Shop() {
         },
       ]);
     }
-
     toast({
       title: "Added to cart",
       description: `${product.name} has been added to your cart.`,
@@ -120,10 +131,12 @@ export default function Shop() {
     setCart(updatedCart);
   };
 
-  const updateQuantity = (index, change) => {
+  const updateQuantity = (index, changeOrValue) => {
     const updatedCart = [...cart];
-    const newQuantity = updatedCart[index].quantity + change;
-
+    let newQuantity =
+      typeof changeOrValue === "number"
+        ? updatedCart[index].quantity + changeOrValue
+        : changeOrValue;
     if (newQuantity <= 0) {
       removeFromCart(index);
     } else {
@@ -147,7 +160,30 @@ export default function Shop() {
     );
   };
 
-  const handleCheckout = () => {
+  // Create sale mutation (backend creates Sale and Payment record)
+  const createSaleMutation = useMutation({
+    mutationFn: (saleData) =>
+      apiRequest("POST", "/api/sales", saleData).then((res) => res.json()),
+    onError: (error) => {
+      toast({
+        title: "Error creating sale",
+        description: error.message || "Failed to complete the sale.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Updated checkout function with payment creation
+  const handleCheckout = async () => {
+    if (!user) {
+      toast({
+        title: "Not Logged In",
+        description: "Please log in or sign up to proceed with checkout.",
+        variant: "destructive",
+      });
+      navigate("/user-login");
+      return;
+    }
     if (cart.length === 0) {
       toast({
         title: "Empty cart",
@@ -156,23 +192,76 @@ export default function Shop() {
       });
       return;
     }
-
-    // In a real app, this would navigate to a checkout page
-    toast({
-      title: "Checkout",
-      description: "Proceeding to checkout...",
-    });
-
-    // Simulate a successful purchase
-    setTimeout(() => {
+    // Build sale data from cart.
+    const saleData = {
+      customerName: user?.name || "Guest",
+      status: "pending",
+      items: cart.map((item) => ({
+        productId: item.id,
+        productName: item.name,
+        quantity: item.quantity,
+        price: parseFloat(item.price.toFixed(2)),
+      })),
+      subtotal: parseFloat(calculateCartTotal().toFixed(2)),
+      tax: parseFloat((calculateCartTotal() * 0.05).toFixed(2)),
+      total: parseFloat((calculateCartTotal() * 1.05).toFixed(2)),
+      notes: "Sale created by user",
+    };
+  
+    try {
+      // Create the sale and get the result
+      const result = await createSaleMutation.mutateAsync(saleData);
+      console.log("Sale creation result:", result);
+      // Since your backend returns the sale directly, use result._id
+      const saleId = result._id;
+      if (!saleId) {
+        throw new Error("Sale ID not found in response");
+      }
+  
+      // Build payment data for the new Payment record
+      const paymentData = {
+        saleId,
+        amount: saleData.total,
+        method: "credit_card", // Adjust as needed
+        status: "pending", // Initially pending; update after payment confirmation
+        customerName: user?.name,
+        reference: "ref-123456", // Optionally generate a unique reference
+      };
+  
+      // Create a Payment record by calling the payment API endpoint
+      const paymentResult = await apiRequest("POST", "/api/user/payment", paymentData)
+        .then((res) => res.json());
+      
+      console.log("Payment record created:", paymentResult);
+  
+      // Open a simulated payment gateway window (adjust URL as necessary)
+      const totalAmount = calculateCartTotal().toFixed(2);
+      const paymentUrl = `https://payment-gateway.example.com/checkout?amount=${totalAmount}`;
+      window.open(paymentUrl, "_blank");
+  
+      // Simulate waiting for payment confirmation (e.g., 3 seconds delay)
+      setTimeout(async () => {
+        const updatedSale = await apiRequest(
+          "PATCH",
+          `/api/sales/${saleId}/status`,
+          { status: "paid" }
+        ).then((res) => res.json());
+        queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
+        toast({
+          title: "Sale completed",
+          description: `Sale #${updatedSale._id} has been completed and payment is successful.`,
+        });
+        setCart([]);
+      }, 3000);
+    } catch (error) {
       toast({
-        title: "Order successful!",
-        description: "Your order has been placed successfully.",
+        title: "Error completing sale",
+        description: error.message || "Failed to complete the sale.",
+        variant: "destructive",
       });
-      setCart([]);
-      setIsCartOpen(false);
-    }, 1500);
+    }
   };
+  
 
   const handleLogout = () => {
     logout();
@@ -183,15 +272,13 @@ export default function Shop() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <header className="bg-[#E76F51] py-4 px-6 shadow-md sticky top-0 z-10">
         <div className="container mx-auto flex justify-between items-center">
-          {/* Fixed the nested <a> issue by applying the className directly on Link */}
           <Link
             href="/"
             className="text-2xl font-bold text-white flex items-center"
           >
             <Home className="h-6 w-6 mr-2" />
-            Safari Shop
+            Jeevantu
           </Link>
-
           <div className="hidden md:flex items-center space-x-4 flex-1 max-w-md mx-8">
             <div className="relative w-full">
               <Input
@@ -203,7 +290,6 @@ export default function Shop() {
               <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
             </div>
           </div>
-
           <div className="flex items-center space-x-4">
             <Drawer open={isCartOpen} onOpenChange={setIsCartOpen}>
               <DrawerTrigger asChild>
@@ -216,7 +302,7 @@ export default function Shop() {
                   )}
                 </Button>
               </DrawerTrigger>
-              <DrawerContent>
+              <DrawerContent className="bg-white text-gray-900">
                 <DrawerHeader>
                   <DrawerTitle>Shopping Cart</DrawerTitle>
                 </DrawerHeader>
@@ -266,9 +352,15 @@ export default function Shop() {
                                   >
                                     <Minus className="h-3 w-3" />
                                   </Button>
-                                  <span className="w-8 text-center text-sm">
-                                    {item.quantity}
-                                  </span>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={item.quantity}
+                                    onChange={(e) =>
+                                      updateQuantity(index, parseInt(e.target.value))
+                                    }
+                                    className="w-12 text-center p-0 border-none"
+                                  />
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -286,7 +378,6 @@ export default function Shop() {
                           </div>
                         ))}
                       </div>
-
                       <div className="border-t mt-4 pt-4">
                         <div className="flex justify-between items-center mb-4">
                           <span className="font-medium">Total</span>
@@ -294,7 +385,6 @@ export default function Shop() {
                             ${calculateCartTotal().toFixed(2)}
                           </span>
                         </div>
-
                         <div className="flex space-x-2">
                           <Button
                             variant="outline"
@@ -317,7 +407,6 @@ export default function Shop() {
                 <DrawerFooter></DrawerFooter>
               </DrawerContent>
             </Drawer>
-
             {user ? (
               <div className="flex items-center">
                 <Button
@@ -340,7 +429,6 @@ export default function Shop() {
           </div>
         </div>
       </header>
-
       <div className="md:hidden px-4 py-3 bg-white shadow-sm">
         <div className="relative">
           <Input
@@ -352,7 +440,6 @@ export default function Shop() {
           <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
         </div>
       </div>
-
       <main className="flex-1">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col md:flex-row gap-6">
@@ -364,16 +451,13 @@ export default function Shop() {
                     <Filter className="h-4 w-4 mr-2" />
                     Filters
                   </h2>
-
                   <div className="space-y-4">
                     <div>
                       <h3 className="text-sm font-medium mb-2">Categories</h3>
                       <div className="space-y-1">
                         <div
                           className={`px-2 py-1 text-sm rounded-md cursor-pointer hover:bg-gray-100 ${
-                            selectedCategory === ""
-                              ? "bg-gray-100 font-medium"
-                              : ""
+                            selectedCategory === "" ? "bg-gray-100 font-medium" : ""
                           }`}
                           onClick={() => setSelectedCategory("")}
                         >
@@ -395,7 +479,6 @@ export default function Shop() {
                         ))}
                       </div>
                     </div>
-
                     <div>
                       <h3 className="text-sm font-medium mb-2">Sort By</h3>
                       <select
@@ -412,7 +495,6 @@ export default function Shop() {
                   </div>
                 </CardContent>
               </Card>
-
               <Card>
                 <CardContent className="p-4">
                   <h2 className="font-semibold mb-3">Need Help?</h2>
@@ -424,16 +506,12 @@ export default function Shop() {
                 </CardContent>
               </Card>
             </div>
-
-            {/* Product Grid */}
             <div className="flex-1">
               <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-semibold text-[#264653]">
                   {selectedCategory
-                    ? `${
-                        selectedCategory.charAt(0).toUpperCase() +
-                        selectedCategory.slice(1)
-                      } Products`
+                    ? `${selectedCategory.charAt(0).toUpperCase() +
+                        selectedCategory.slice(1)} Products`
                     : "All Products"}
                 </h1>
                 <div className="text-sm text-gray-500">
@@ -441,7 +519,6 @@ export default function Shop() {
                   {sortedProducts?.length === 1 ? "product" : "products"} found
                 </div>
               </div>
-
               {isLoading ? (
                 <div className="flex justify-center items-center h-64">
                   <div className="animate-spin h-8 w-8 border-4 border-[#E76F51] border-t-transparent rounded-full"></div>
@@ -449,19 +526,82 @@ export default function Shop() {
               ) : sortedProducts?.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-lg shadow">
                   <Search className="h-12 w-12 mx-auto text-gray-300" />
-                  <h3 className="mt-4 text-lg font-medium">No products found</h3>
+                  <h3 className="mt-4 text-lg font-medium">
+                    No products found
+                  </h3>
                   <p className="mt-1 text-gray-500">
-                    Try adjusting your search or filter to find what you're looking for.
+                    Try adjusting your search or filter to find what you're looking
+                    for.
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {sortedProducts?.map((product) => (
-                    <ProductCard
+                    <div
                       key={product.id}
-                      product={product}
-                      onAddToCart={() => addToCart(product)}
-                    />
+                      className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+                    >
+                      <div className="relative h-48 bg-gray-100">
+                        {product.imageUrl ? (
+                          <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400">
+                            No image available
+                          </div>
+                        )}
+                        <Badge className="absolute top-2 left-2 bg-white text-[#264653]">
+                          {product.category}
+                        </Badge>
+                      </div>
+                      <div className="p-4">
+                        <h3 className="font-semibold text-[#264653] text-lg">
+                          {product.name}
+                        </h3>
+                        <div className="flex items-center mt-1">
+                          <div className="flex">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`h-4 w-4 ${
+                                  i < 4
+                                    ? "text-yellow-400 fill-yellow-400"
+                                    : "text-gray-300"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-xs text-gray-500 ml-1">
+                            (4.0)
+                          </span>
+                        </div>
+                        <p className="text-lg font-semibold text-[#2A9D8F] mt-2">
+                          ${parseFloat(product.price).toFixed(2)}
+                        </p>
+                        <div className="mt-3 text-sm text-gray-500">
+                          {product.stock > 0 ? (
+                            <span>
+                              In stock ({product.stock} available)
+                            </span>
+                          ) : (
+                            <span className="text-red-500">
+                              Out of stock
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          className="mt-3 w-full bg-[#E76F51] hover:bg-[#D75F41]"
+                          onClick={() => addToCart(product)}
+                          disabled={product.stock <= 0}
+                        >
+                          <ShoppingCart className="h-4 w-4 mr-2" />
+                          Add to Cart
+                        </Button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -469,153 +609,114 @@ export default function Shop() {
           </div>
         </div>
       </main>
-
-      <footer className="bg-[#264653] text-white py-8">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="text-lg font-semibold mb-4">About Us</h3>
-              <p className="text-gray-300">
-                Jungle Safari Souvenir Shop offers handcrafted memorabilia and
-                souvenirs to remember your safari adventure.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
-              <ul className="space-y-2">
-                <li>
-                  <a href="#" className="text-gray-300 hover:text-white">
-                    Home
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-300 hover:text-white">
-                    Shop
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-300 hover:text-white">
-                    Contact
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="text-gray-300 hover:text-white">
-                    FAQs
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
-              <p className="text-gray-300">Email: info@junglesafari.com</p>
-              <p className="text-gray-300">Phone: +1 (555) 123-4567</p>
-            </div>
-          </div>
-          <div className="border-t border-gray-700 mt-8 pt-4 text-center text-gray-400">
-            <p>
-              © {new Date().getFullYear()} Jungle Safari Souvenir Shop. All rights
-              reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-function ProductCard({ product, onAddToCart }) {
-  const [showDetails, setShowDetails] = useState(false);
-
-  // Generate random rating between 3 and 5
-  const rating = Math.floor(Math.random() * (5 - 3 + 1) + 3);
-
-  return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-      <div className="relative h-48 bg-gray-100">
-        {product.imageUrl ? (
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
-            No image available
-          </div>
-        )}
-        <Badge className="absolute top-2 left-2 bg-white text-[#264653]">
-          {product.category}
-        </Badge>
-      </div>
-
-      <CardContent className="p-4">
-        <h3 className="font-semibold text-[#264653] text-lg">{product.name}</h3>
-
-        <div className="flex items-center mt-1">
-          <div className="flex">
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                className={`h-4 w-4 ${
-                  i < rating
-                    ? "text-yellow-400 fill-yellow-400"
-                    : "text-gray-300"
-                }`}
-              />
-            ))}
-          </div>
-          <span className="text-xs text-gray-500 ml-1">
-            ({Math.floor(Math.random() * 50) + 5})
-          </span>
-        </div>
-
-        <p className="text-lg font-semibold text-[#2A9D8F] mt-2">
-          ${parseFloat(product.price).toFixed(2)}
-        </p>
-
-        {product.description && (
-          <div className="mt-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-0 h-auto flex items-center text-gray-500 hover:text-[#264653]"
-              onClick={() => setShowDetails(!showDetails)}
-            >
-              Details
-              <ChevronDown
-                className={`h-4 w-4 ml-1 transition-transform ${
-                  showDetails ? "rotate-180" : ""
-                }`}
-              />
-            </Button>
-
-            {showDetails && (
-              <p className="text-sm text-gray-600 mt-2">
-                {product.description}
-              </p>
+      <Footer/>
+      <Drawer open={isCartOpen} onOpenChange={setIsCartOpen}>
+        <DrawerTrigger asChild></DrawerTrigger>
+        <DrawerContent className="bg-white text-gray-900">
+          <DrawerHeader>
+            <DrawerTitle>Shopping Cart</DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4 py-2">
+            {cart.length === 0 ? (
+              <div className="text-center py-8">
+                <ShoppingCart className="h-12 w-12 mx-auto text-gray-300" />
+                <p className="mt-4 text-gray-500">Your cart is empty</p>
+              </div>
+            ) : (
+              <div>
+                <div className="space-y-4 max-h-[60vh] overflow-auto py-2">
+                  {cart.map((item, index) => (
+                    <div key={index} className="flex border-b pb-4">
+                      <div className="h-16 w-16 bg-gray-100 rounded flex-shrink-0 mr-3 overflow-hidden">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                            No image
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between">
+                          <h3 className="font-medium">{item.name}</h3>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-gray-400 -mr-2"
+                            onClick={() => removeFromCart(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex justify-between items-center mt-2">
+                          <div className="flex items-center border rounded">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 p-0"
+                              onClick={() => updateQuantity(index, -1)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) =>
+                                updateQuantity(index, parseInt(e.target.value))
+                              }
+                              className="w-12 text-center p-0 border-none"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 p-0"
+                              onClick={() => updateQuantity(index, 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <span className="font-medium">
+                            ${(item.price * item.quantity).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t mt-4 pt-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="font-medium">Total</span>
+                    <span className="font-semibold text-lg">
+                      ${calculateCartTotal().toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={handleClearCart}
+                    >
+                      Clear Cart
+                    </Button>
+                    <Button
+                      className="flex-1 bg-[#E76F51] hover:bg-[#D75F41]"
+                      onClick={handleCheckout}
+                    >
+                      Checkout
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
-        )}
-
-        <div className="mt-3 text-sm text-gray-500">
-          {product.stock > 0 ? (
-            <span>In stock ({product.stock} available)</span>
-          ) : (
-            <span className="text-red-500">Out of stock</span>
-          )}
-        </div>
-      </CardContent>
-
-      <CardFooter className="px-4 pb-4 pt-0">
-        <Button
-          className="w-full bg-[#E76F51] hover:bg-[#D75F41]"
-          onClick={onAddToCart}
-          disabled={product.stock <= 0}
-        >
-          <ShoppingCart className="h-4 w-4 mr-2" />
-          Add to Cart
-        </Button>
-      </CardFooter>
-    </Card>
+          <DrawerFooter></DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "../hooks/use-toast";
-import { Plus, Edit, Trash2, Search, Filter, Package } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Filter, Package, Eye } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import {
@@ -42,7 +42,7 @@ import { Card, CardContent } from "../components/ui/Card";
 
 const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  category: z.string().min(1, "Please select a category"),
+  category: z.string().min(1, "Please enter a category"), // updated message
   price: z.coerce.number().positive("Price must be a positive number"),
   cost: z.coerce.number().positive("Cost must be a positive number"),
   stock: z.coerce.number().nonnegative("Stock can't be negative"),
@@ -55,8 +55,11 @@ export default function Inventory() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  // New state for viewing product details
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  // Use "all" as default for the filter so we never use an empty string in a SelectItem.
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -76,14 +79,13 @@ export default function Inventory() {
     queryKey: ["/api/products"],
   });
 
+  // Categories are still used for filtering in the table
   const { data: categories } = useQuery({
     queryKey: ["/api/products/categories"],
   });
 
   const createProductMutation = useMutation({
-    mutationFn: (product) => {
-      return apiRequest("POST", "/api/products", product);
-    },
+    mutationFn: (product) => apiRequest("POST", "/api/products", product),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
@@ -103,9 +105,8 @@ export default function Inventory() {
   });
 
   const updateProductMutation = useMutation({
-    mutationFn: (product) => {
-      return apiRequest("PATCH", `/api/products/${product.id}`, product);
-    },
+    mutationFn: (product) =>
+      apiRequest("PATCH", `/api/products/${product.id}`, product),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
@@ -126,9 +127,8 @@ export default function Inventory() {
   });
 
   const deleteProductMutation = useMutation({
-    mutationFn: (productId) => {
-      return apiRequest("DELETE", `/api/products/${productId}`, {});
-    },
+    mutationFn: (productId) =>
+      apiRequest("DELETE", `/api/products/${productId}`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
@@ -147,7 +147,7 @@ export default function Inventory() {
 
   const onSubmit = (data) => {
     if (editingProduct) {
-      updateProductMutation.mutate({ ...data, id: editingProduct.id });
+      updateProductMutation.mutate({ ...data, id: editingProduct._id });
     } else {
       createProductMutation.mutate(data);
     }
@@ -168,10 +168,16 @@ export default function Inventory() {
     setIsDialogOpen(true);
   };
 
+  // Updated deletion to use product._id || product.id
   const handleDelete = (productId) => {
     if (confirm("Are you sure you want to delete this product?")) {
       deleteProductMutation.mutate(productId);
     }
+  };
+
+  // New function to handle viewing details
+  const handleView = (product) => {
+    setSelectedProduct(product);
   };
 
   const openAddDialog = () => {
@@ -189,10 +195,13 @@ export default function Inventory() {
     setIsDialogOpen(true);
   };
 
+  // Filtering logic
   const filteredProducts = products?.filter((product) => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        (product.description || "").toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter ? product.category === categoryFilter : true;
+    const matchesSearch =
+      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (product.description || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory =
+      categoryFilter === "all" ? true : product.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
@@ -239,7 +248,7 @@ export default function Inventory() {
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {categories?.map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
@@ -280,7 +289,7 @@ export default function Inventory() {
                   </TableRow>
                 ) : (
                   filteredProducts?.map((product) => (
-                    <TableRow key={product.id}>
+                    <TableRow key={product._id || product.id}>
                       <TableCell>
                         <div className="flex items-center">
                           {product.imageUrl ? (
@@ -318,9 +327,8 @@ export default function Inventory() {
                             ? "bg-[#EB5757] bg-opacity-10 text-[#EB5757]"
                             : product.stock < product.minStock
                               ? "bg-[#F2C94C] bg-opacity-10 text-[#F2C94C]"
-                              : "bg-[#27AE60] bg-opacity-10 text-[#27AE60]"
-                          }`}
-                        >
+                              : "bg-[#27AE60] bg-opacity-10 text-[#27AE60]"}
+                        `}>
                           {product.stock <= 0
                             ? "Out of Stock"
                             : product.stock < product.minStock
@@ -333,6 +341,13 @@ export default function Inventory() {
                           <Button
                             variant="outline"
                             size="icon"
+                            onClick={() => handleView(product)}
+                          >
+                            <Eye className="h-4 w-4 text-[#2A9D8F]" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
                             onClick={() => handleEdit(product)}
                           >
                             <Edit className="h-4 w-4 text-[#2A9D8F]" />
@@ -340,7 +355,9 @@ export default function Inventory() {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => handleDelete(product.id)}
+                            onClick={() =>
+                              handleDelete(product._id || product.id)
+                            }
                           >
                             <Trash2 className="h-4 w-4 text-[#EB5757]" />
                           </Button>
@@ -381,29 +398,16 @@ export default function Inventory() {
                   )}
                 />
                 
+                {/* Changed Category field from Select to Input */}
                 <FormField
                   control={form.control}
                   name="category"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {categories?.map((category) => (
-                            <SelectItem key={category} value={category}>
-                              {category}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <Input {...field} placeholder="Enter category" />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -495,11 +499,7 @@ export default function Inventory() {
               />
               
               <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                >
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button
@@ -519,6 +519,53 @@ export default function Inventory() {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Product Details Dialog */}
+      <Dialog open={!!selectedProduct} onOpenChange={() => setSelectedProduct(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Product Details</DialogTitle>
+          </DialogHeader>
+          {selectedProduct && (
+            <div className="space-y-4">
+              <div>
+                <strong>Name:</strong> {selectedProduct.name}
+              </div>
+              <div>
+                <strong>Category:</strong> {selectedProduct.category}
+              </div>
+              <div>
+                <strong>Price:</strong> ${selectedProduct.price.toFixed(2)}
+              </div>
+              <div>
+                <strong>Cost:</strong> ${selectedProduct.cost.toFixed(2)}
+              </div>
+              <div>
+                <strong>Stock:</strong> {selectedProduct.stock}
+              </div>
+              <div>
+                <strong>Minimum Stock:</strong> {selectedProduct.minStock}
+              </div>
+              {selectedProduct.description && (
+                <div>
+                  <strong>Description:</strong> {selectedProduct.description}
+                </div>
+              )}
+              {selectedProduct.imageUrl && (
+                <div>
+                  <strong>Image:</strong>
+                  <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="mt-2 h-20 w-20 rounded" />
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedProduct(null)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
